@@ -1,0 +1,157 @@
+<div id="contentwrapper">
+  <div id="contentcolumn" ng-show="ctrl.repo.packages.length > 0">
+    <table id="summary">
+      <tbody>
+        <tr>
+          <th style="width: 25%;">Packages not in index</th>
+          <td colspan="3">{{ ctrl.repo.unfoundPackages.join(", ") }}</td>
+        </tr>
+        <tr>
+          <th style="width: 25%;">Paths in index valid?</th>
+          <td style="width: 25%;">{{ ctrl.repo.validPaths }}</td>
+          <th style="width: 25%;">No '%3a' in the filenames?</th>
+          <td style="width: 25%;">{{ ctrl.repo.noPercentage3a }}</td>
+        </tr>
+        <tr>
+          <th style="width: 25%;">Rebuild index file</th>
+          <td style="width: 25%;"><button ng-click="ctrl.rebuildIndex()">Proceed</button></td>
+          <th style="width: 25%;">Remove '3a' from filenames</th>
+          <td style="width: 25%;"><button ng-click="ctrl.removePercentage3a()">Proceed</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <table id="upload">
+      <thead>
+        <tr>
+          <th width="50%" style="padding: 5px">
+            <button class="fileUpload">
+              <span>+</span>
+              <input class="upload" type="file" nv-file-select="" uploader="ctrl.uploader" multiple  />
+            </button>
+            <span>Filename</span>
+          </th>
+          <th ng-show="ctrl.uploader.isHTML5">Size</th>
+          <th ng-show="ctrl.uploader.isHTML5">Progress</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="item in ctrl.uploader.queue">
+          <td><strong>{{ item.file.name }}</strong></td>
+          <td ng-show="ctrl.uploader.isHTML5" nowrap>{{ item.file.size/1024/1024|number:2 }} MB</td>
+          <td ng-show="ctrl.uploader.isHTML5">
+            <div class="progress" style="margin-bottom: 0;">
+              <div class="progress-bar" role="progressbar" ng-style="{ 'width': item.progress + '%' }"></div>
+            </div>
+          </td>
+          <td class="text-center">
+            <span ng-show="item.isSuccess"><i class="glyphicon glyphicon-ok"></i></span>
+            <span ng-show="item.isCancel"><i class="glyphicon glyphicon-ban-circle"></i></span>
+            <span ng-show="item.isError"><i class="glyphicon glyphicon-remove"></i></span>
+          </td>
+          <td nowrap>
+            <button type="button" class="btn btn-success btn-xs" ng-click="item.upload()" ng-disabled="item.isReady || item.isUploading || item.isSuccess">
+              <span class="glyphicon glyphicon-upload"></span> Upload
+            </button>
+            <button type="button" class="btn btn-warning btn-xs" ng-click="item.cancel()" ng-disabled="!item.isUploading">
+              <span class="glyphicon glyphicon-ban-circle"></span> Cancel
+            </button>
+            <button type="button" class="btn btn-danger btn-xs" ng-click="item.remove()">
+              <span class="glyphicon glyphicon-trash"></span> Remove
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <table id="packages">
+      <thead>
+        <tr>
+          <th width="40%">Package name (Total: {{ ctrl.totalItems }})</th>
+          <th>Version</th>
+          <th>Arch</th>
+          <th width="20%">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="p in ctrl.repo.filteredPackages">
+          <td>{{ p.name }}</td>
+          <td>{{ p.version }}</td>
+          <td>{{ p.arch }}</td>
+          <td nowrap>
+            <button type="button" class="btn btn-success btn-xs" ng-click="ctrl.downloadFile(p)">
+              <span class="glyphicon glyphicon-download"></span> Download
+            </button>
+            <button type="button" class="btn btn-danger btn-xs" ng-click="ctrl.removeFile(p)">
+              <span class="glyphicon glyphicon-trash"></span> Remove
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div>
+      <pagination boundary-links="true"
+                  rotate="false"
+                  ng-model="ctrl.currentPage"
+                  ng-change="ctrl.pageChanged()"
+                  total-items="ctrl.totalItems"
+                  items-per-page="ctrl.itemsPerPage"
+                  max-size="10"
+                  class="pagination-sm" previous-text="&lsaquo;" next-text="&rsaquo;" first-text="&laquo;" last-text="&raquo;">
+      </pagination>
+    </div>
+  </div>
+</div>
+<div id="leftcolumn">
+  <div>
+    <table ng-show="ctrl.repo.dists.length > 0">
+      <thead>
+        <tr>
+          <th>Distribution</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="d in ctrl.repo.dists">
+          <td ng-click="ctrl.distChange(d)">
+            <span ng-class="{bold: ctrl.repo.dist == d}">{{ d }}</span>
+            <span ng-if="ctrl.repo.dist == d" class="glyphicon glyphicon-ok"></span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <table ng-show="ctrl.repo.components.length > 0">
+      <thead>
+        <tr>
+          <th>Component</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="c in ctrl.repo.components">
+          <td ng-click="ctrl.componentsChange(c)">
+            <span ng-class="{bold: ctrl.repo.component == c}">{{ c }}</span>
+            <span ng-if="ctrl.repo.component == c" class="glyphicon glyphicon-ok"></span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <table ng-show="ctrl.repo.arches.length > 0">
+      <thead>
+        <tr>
+          <th>Arch</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="a in ctrl.repo.arches">
+          <td ng-click="ctrl.archesChange(a)">
+            <span ng-class="{bold: ctrl.repo.arch == a}">{{ a }}</span>
+            <span ng-if="ctrl.repo.arch == a" class="glyphicon glyphicon-ok"></span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

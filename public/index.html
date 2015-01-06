@@ -1,0 +1,264 @@
+<html ng-app="repo-manager">
+<head>
+<title>Repo Manager</title>
+<link rel="stylesheet" type="text/css" href="http://l-lin.github.io/angular-datatables/dist/datatables.bootstrap.css"/>
+<link rel="stylesheet" type="text/css" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css"/>
+<link rel="stylesheet" type="text/css" href="css/table.css"/>
+<link rel="stylesheet" type="text/css" href="css/main.css"/>
+
+<script type="text/javascript" src="http://nervgh.github.io/js/es5-sham.min.js"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.1/angular.js"></script>
+<script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/angular-ui-bootstrap/0.11.0/ui-bootstrap-tpls.min.js"></script>
+<script type="text/javascript" src="http://nervgh.github.io/pages/angular-file-upload/angular-file-upload.js"></script>
+
+<script type="text/javascript" src="http://fgnass.github.io/spin.js/spin.min.js"></script>
+<script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/angular-spinner/0.5.1/angular-spinner.js"></script>
+
+<script type="text/javascript">
+var app = angular.module('repo-manager', ['ui.bootstrap', 'angularFileUpload', 'angularSpinner']);
+
+app.factory('MyHttpInterceptor', ['$q', '$rootScope', '$injector', 'usSpinnerService',
+        function ($q, $rootScope, $injector, usSpinnerService) {
+    usSpinnerService.stop('spinner');
+    $rootScope.http = null;
+    return {
+        'request': function (config) {
+            usSpinnerService.spin('spinner');
+            return config || $q.when(config);
+        },
+        'requestError': function (rejection) {
+            $rootScope.http = $rootScope.http || $injector.get('$http');
+            if ($rootScope.http.pendingRequests.length < 1) {
+                usSpinnerService.stop('spinner');
+            }
+            return $q.reject(rejection);
+        },
+        'response': function (response) {
+            $rootScope.http = $rootScope.http || $injector.get('$http');
+            if ($rootScope.http.pendingRequests.length < 1) {
+                usSpinnerService.stop('spinner');
+            }
+            return response || $q.when(response);
+        },
+        'responseError': function (rejection) {
+            $rootScope.http = $rootScope.http || $injector.get('$http');
+            if ($rootScope.http.pendingRequests.length < 1) {
+                usSpinnerService.stop('spinner');
+            }
+            return $q.reject(rejection);
+        }
+    }
+}]);
+
+app.directive('repo', function() {
+    return {
+        restrict: 'E',
+        templateUrl: 'repo.html'
+    }
+});
+
+app.config(['$httpProvider', function($httpProvider) {
+    $httpProvider.interceptors.push('MyHttpInterceptor');
+}]);
+
+app.controller('AppController', ['$http', '$window', 'FileUploader', function($http, $window, FileUploader) {
+    var self = this;
+    self.Math = window.Math;
+    self.uploader = new FileUploader();
+    self.loginButton = {}
+    self.loginButton.text = 'Login';
+    self.loginButton.disabled = false;
+
+    this.initOrReset = function() {
+        self.ssh = {
+            'host': '10.2.108.249',
+            'port': 22,
+            'username': 'root',
+            'password': '',
+            'baseDir': '/var/www/repo/ubuntu/12042/update',
+            'uuid': undefined
+        };
+        self.repo = {
+            'dists': [], 'dist': undefined,
+            'components': [], 'component': undefined,
+            'arches': [], 'arch': undefined,
+            'packages': [],
+            'unfoundPackages': []
+        };
+    }
+
+    this.login = function(index) {
+        if (self.ssh.uuid === undefined) {
+            $http.post('/explore/login', { ssh: self.ssh }).success(function(response) {
+                self.ssh.uuid = response.uuid;
+                self.repo.dists = response.dists;
+                if (self.repo.dists.length > 0) {
+                    self.repo.dist = self.repo.dists[0];
+                }
+                self.loginButton.text = 'Logout';
+            }).finally(function() {
+                self.loginButton.disabled = false;
+                self.distChange(self.repo.dist);
+            });
+        } else {
+            $http.post('/explore/logout', { ssh: self.ssh }).finally(function() {
+                self.initOrReset();
+            });
+        }
+    };
+
+    this.rebuildIndex = function() {
+        $http.post('/explore/rebuild_index', {
+            dist: self.repo.dist,
+            component: self.repo.component,
+            arch: self.repo.arch,
+            ssh_uuid: self.ssh.uuid
+        }).finally(function() {
+            self.archesChange(self.repo.arch);
+        });
+    }
+
+    this.removePercentage3a = function() {
+        $http.post('/explore/remove_percentage3a', {
+            dist: self.repo.dist,
+            component: self.repo.component,
+            arch: self.repo.arch,
+            ssh_uuid: self.ssh.uuid
+        }).finally(function() {
+            self.archesChange(self.repo.arch);
+        });
+    }
+
+    this.downloadFile = function(p) {
+        $window.open("/explore/download_file" +
+                     "?dist=" + self.repo.dist +
+                     "&component=" + self.repo.component +
+                     "&arch=" + self.repo.arch +
+                     "&ssh_uuid=" + self.ssh.uuid +
+                     "&filename=" + p.name + "_" + p.version + "_" + p.arch + ".deb", '_blank', '');
+    }
+
+    this.removeFile = function(p) {
+        console.log(p);
+    }
+
+    this.distChange = function(d) {
+        self.repo.dist = d;
+        if (self.repo.dist) {
+            self.loginButton.disabled = true;
+            $http.get("/explore/components", {
+                params: {
+                    dist: self.repo.dist,
+                    ssh_uuid: self.ssh.uuid
+                }
+            }).success(function (response) {
+                self.repo.components = response.components;
+                if (self.repo.components.length > 0) {
+                    self.repo.component = self.repo.components[0];
+                }
+                self.componentsChange(self.repo.component);
+            });
+        }
+    };
+
+    this.componentsChange = function(c) {
+        self.repo.component = c;
+        if (self.repo.component) {
+            self.loginButton.disabled = true;
+            $http.get("/explore/arches", {
+                params: {
+                    dist: self.repo.dist,
+                    component: self.repo.component,
+                    ssh_uuid: self.ssh.uuid
+                }
+            }).success(function (response) {
+                self.repo.arches = response.arches;
+                if (self.repo.arches.length > 0) {
+                    self.repo.arch = self.repo.arches[0];
+                }
+                self.archesChange(self.repo.arch);
+            });
+        }
+    };
+
+    this.archesChange = function(a) {
+        self.repo.arch = a;
+        if (self.repo.arch) {
+            self.loginButton.disabled = true;
+            $http.get("/explore/packages", {
+                params: {
+                    dist: self.repo.dist,
+                    component: self.repo.component,
+                    arch: self.repo.arch,
+                    ssh_uuid: self.ssh.uuid
+                }
+            }).success(function (response) {
+                self.repo.packages = response['packages'];
+                self.repo.unfoundPackages = response['unfoundPackages'];
+                self.repo.validPaths = response['validPaths'];
+                self.repo.noPercentage3a = response['noPercentage3a'];
+
+                self.totalItems = self.repo.packages.length;
+                self.repo.filteredPackages = self.repo.packages.slice(0, self.itemsPerPage);
+                self.currentPage = 1;
+                self.loginButton.disabled = false;
+            });
+        }
+    };
+
+    self.currentPage = 1;
+    self.itemsPerPage = 15;
+    this.pageChanged = function() {
+        var begin = ((self.currentPage - 1) * self.itemsPerPage)
+        self.repo.filteredPackages = self.repo.packages.slice(begin, begin + self.itemsPerPage);
+    };
+
+    self.initOrReset();
+}]);
+</script>
+
+</head>
+
+<body>
+
+<span us-spinner="{radius:30, width:8, length: 16}" spinner-key="spinner"></span>
+
+<div>
+  <tabset>
+    <tab heading="Explore" ng-controller="AppController as ctrl">
+      <div id="topsection">
+        <table style="max-width: 1000px">
+          <thead>
+            <th>Host</th>
+            <th>Port</th>
+            <th>Username</th>
+            <th>Password</th>
+            <th>Base Directory</th>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="text" class="expand" ng-model="ctrl.ssh.host" required /></td>
+              <td><input type="number" class="expand" ng-model="ctrl.ssh.port" min="1" max="65535" required /></td>
+              <td><input type="text" class="expand" ng-model="ctrl.ssh.username" required /></td>
+              <td><input type="password" class="expand" ng-model="ctrl.ssh.password" required /></td>
+              <td>
+                <input type="text" class="expand" ng-model="ctrl.ssh.baseDir" required />
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5">
+                <button ng-click="ctrl.login()" ng-disabled="ctrl.loginButton.disabled">{{ ctrl.loginButton.text }}</button>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <repo/>
+    </tab>
+  </tabset>
+</div>
+
+</body>
+</html>
